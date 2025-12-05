@@ -1,0 +1,62 @@
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+::-webkit-scrollbar-track {
+    background: #f1f5f9; 
+}
+::-webkit-scrollbar-thumb {
+    background: #cbd5e1; 
+    border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+    background: #94a3b8; 
+}
+
+/* Custom helpers */
+.text-primary {
+    color: #0f766e;
+}
+
+.ai-table-section table {
+    margin: 0 auto;
+}
+
+.ai-table-section table th,
+.ai-table-section table td {
+    text-align: center;
+}
+
+/* Ensure layout fits narrower viewports */
+html,
+body {
+    width: 100%;
+    min-height: 100%;
+}
+
+main,
+#dashboard-content {
+    width: min(100%, 100vw);
+    margin: 0 auto;
+}
+
+/* Tab Transitions */
+.tab-content {
+    animation: fadeIn 0.3s ease-in-out;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(5px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+/* Chart Tooltip Customization */
+#chartjs-tooltip {
+    opacity: 1;
+    position: absolute;
+    background: rgba(0, 0, 0, 0.7);
+    color: white;
+    border-radius: 3px;
+    pointer-events: none;
+}
