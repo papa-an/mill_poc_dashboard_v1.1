@@ -38,7 +38,7 @@ const elements = {
         oerMin: document.getElementById('kpi-oer-min'),
         fruitSource: document.getElementById('kpi-fruit-source'),
         lmmStatus: document.getElementById('kpi-lmm-status'),
-    missingData: document.getElementById('kpi-missing-data')
+        missingData: document.getElementById('kpi-missing-data')
     }
 };
 
@@ -173,9 +173,14 @@ function processWorkbook(workbook) {
             return;
         }
 
-        const rawOerBefore = XLSX.utils.sheet_to_json(workbook.Sheets['OER Data Before HFC'], { defval: null });
-        const rawOerAfter = XLSX.utils.sheet_to_json(workbook.Sheets['OER Data After HFC'], { defval: null });
-        const rawFruitMix = XLSX.utils.sheet_to_json(workbook.Sheets['Fruit Mix %'], { defval: null });
+        let rawOerBefore = XLSX.utils.sheet_to_json(workbook.Sheets['OER Data Before HFC'], { defval: null });
+        let rawOerAfter = XLSX.utils.sheet_to_json(workbook.Sheets['OER Data After HFC'], { defval: null });
+        let rawFruitMix = XLSX.utils.sheet_to_json(workbook.Sheets['Fruit Mix %'], { defval: null });
+
+        // Filter out SNKM
+        rawOerBefore = rawOerBefore.filter(r => r['Estate Code'] !== 'SNKM');
+        rawOerAfter = rawOerAfter.filter(r => r['Estate Code'] !== 'SNKM');
+        rawFruitMix = rawFruitMix.filter(r => r['Estate Code'] !== 'SNKM');
 
         const completeness = findIncompleteMills(rawOerBefore, rawOerAfter, rawFruitMix);
         state.missingData = completeness.incomplete;
@@ -396,10 +401,10 @@ function findIncompleteMills(rawOerBefore, rawOerAfter, rawFruitMix) {
 
     allEstates.forEach(estate => {
         const missing = [];
-        if (!estatesBefore.has(estate)) missing.push('OER Before HFC');
-        if (!estatesAfter.has(estate)) missing.push('OER After HFC');
-        if (blanksBefore[estate]) missing.push(`OER Before HFC: ${blanksBefore[estate]} blank month${blanksBefore[estate] > 1 ? 's' : ''}`);
-        if (blanksAfter[estate]) missing.push(`OER After HFC: ${blanksAfter[estate]} blank month${blanksAfter[estate] > 1 ? 's' : ''}`);
+        if (!estatesBefore.has(estate)) missing.push('Pre-LMM OER');
+        if (!estatesAfter.has(estate)) missing.push('Post-LMM OER');
+        if (blanksBefore[estate]) missing.push(`Pre-LMM OER: ${blanksBefore[estate]} blank month${blanksBefore[estate] > 1 ? 's' : ''}`);
+        if (blanksAfter[estate]) missing.push(`Post-LMM OER: ${blanksAfter[estate]} blank month${blanksAfter[estate] > 1 ? 's' : ''}`);
         if (!estatesFruit.has(estate)) missing.push('Fruit Mix %');
         if (blanksFruit[estate]) missing.push(`Fruit Mix %: ${blanksFruit[estate]} blank month${blanksFruit[estate] > 1 ? 's' : ''}`);
 
@@ -464,7 +469,7 @@ function initializeFilters() {
     // Populate Estates (initially all)
     const estates = [...new Set(state.rawData.map(d => d.estate))].sort();
     const estateSelect = elements.estateFilter;
-    estateSelect.innerHTML = '<option value="all">All Estates</option>';
+    estateSelect.innerHTML = '<option value="all">All Mills</option>';
     estates.forEach(e => {
         const option = document.createElement('option');
         option.value = e;
@@ -539,7 +544,7 @@ function updateEstateFilter() {
     const estateSelect = elements.estateFilter;
     const currentEstate = estateSelect.value;
 
-    estateSelect.innerHTML = '<option value="all">All Estates</option>';
+    estateSelect.innerHTML = '<option value="all">All Mills</option>';
     validEstates.forEach(e => {
         const option = document.createElement('option');
         option.value = e;
@@ -747,7 +752,7 @@ function renderCharts(data) {
             labels: labels,
             datasets: [
                 {
-                    label: 'OER Before HFC',
+                    label: 'OER Pre-LMM',
                     // OER is already %, no multiply by 100
                     data: allMonths.map(m => m.data && m.data.oer_before_count ? (m.data.oer_before_sum / m.data.oer_before_count) : null),
                     borderColor: '#94a3b8',
@@ -757,7 +762,7 @@ function renderCharts(data) {
                     spanGaps: true
                 },
                 {
-                    label: 'OER After HFC',
+                    label: 'OER Post-LMM',
                     data: allMonths.map(m => m.data && m.data.oer_after_count ? (m.data.oer_after_sum / m.data.oer_after_count) : null),
                     borderColor: '#0f766e',
                     backgroundColor: '#0f766e',
