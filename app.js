@@ -7,11 +7,13 @@ const state = {
         fruitComplete: []
     },
     processedData: [],
+    millCategories: {},
     filters: {
         psm: 'all',
         region: 'all',
         estate: 'all',
         lmm: 'all',
+        millType: 'all',
         startDate: '',
         endDate: ''
     },
@@ -26,6 +28,9 @@ const elements = {
     regionFilter: document.getElementById('region-filter'),
     estateFilter: document.getElementById('estate-filter'),
     lmmFilter: document.getElementById('lmm-filter'),
+    millTypeFilter: document.getElementById('mill-type-filter'),
+    millCountBadge: document.getElementById('mill-count-badge'),
+    millList: document.getElementById('mill-list'),
     startDateFilter: document.getElementById('start-date-filter'),
     endDateFilter: document.getElementById('end-date-filter'),
     tabBtns: document.querySelectorAll('.tab-btn'),
@@ -83,6 +88,7 @@ elements.psmFilter.addEventListener('change', (e) => updateFilters('psm', e.targ
 elements.regionFilter.addEventListener('change', (e) => updateFilters('region', e.target.value));
 elements.estateFilter.addEventListener('change', (e) => updateFilters('estate', e.target.value));
 elements.lmmFilter.addEventListener('change', (e) => updateFilters('lmm', e.target.value));
+elements.millTypeFilter.addEventListener('change', (e) => updateFilters('millType', e.target.value));
 elements.startDateFilter.addEventListener('change', (e) => updateFilters('startDate', e.target.value));
 elements.endDateFilter.addEventListener('change', (e) => updateFilters('endDate', e.target.value));
 
@@ -206,6 +212,7 @@ function processWorkbook(workbook) {
         const fruitMix = transformData(rawFruitMix, 'fruit_mix_pct', true);
 
         state.rawData = mergeDatasets(oerBefore, oerAfter, fruitMix, mappingData);
+        state.millCategories = categorizeMills(state.rawData);
 
         initializeFilters();
         updateDashboard();
@@ -359,6 +366,51 @@ function mergeDatasets(oerBefore, oerAfter, fruitMix, mappingData = {}) {
 
     return Object.values(merged);
 }
+
+function categorizeMills(data) {
+    const millCategories = {};
+
+    // Group data by mill
+    data.forEach(row => {
+        if (!millCategories[row.estate]) {
+            millCategories[row.estate] = {
+                estate: row.estate,
+                lmm: row.lmm,
+                psm: row.psm,
+                region: row.region,
+                totalInti: 0,
+                totalPlasma: 0,
+                total3P: 0,
+                count: 0
+            };
+        }
+
+        millCategories[row.estate].totalInti += (row.fruit_inti || 0);
+        millCategories[row.estate].totalPlasma += (row.fruit_plasma || 0);
+        millCategories[row.estate].total3P += (row.fruit_3p || 0);
+        millCategories[row.estate].count++;
+    });
+
+    // Calculate averages and categorize
+    Object.keys(millCategories).forEach(estate => {
+        const mill = millCategories[estate];
+        const avgInti = mill.totalInti / mill.count;
+        const avgPlasma = mill.totalPlasma / mill.count;
+        const avg3P = mill.total3P / mill.count;
+
+        // Determine mill type based on 3P percentage
+        const avg3PPct = avg3P * 100;
+
+        if (avg3PPct <= 1) {
+            mill.millType = 'Inti-dominant';
+        } else {
+            mill.millType = 'Commercial';
+        }
+    });
+
+    return millCategories;
+}
+
 
 function findIncompleteMills(rawOerBefore, rawOerAfter, rawFruitMix) {
     const getEstates = (rows) => new Set(
@@ -566,15 +618,26 @@ function updateDashboard() {
         const matchEstate = state.filters.estate === 'all' || d.estate === state.filters.estate;
         const matchLmm = state.filters.lmm === 'all' || d.lmm === state.filters.lmm;
 
+        // Mill Type Filter
+        let matchMillType = true;
+        if (state.filters.millType !== 'all') {
+            const millCat = state.millCategories[d.estate];
+            if (millCat) {
+                matchMillType = millCat.millType === state.filters.millType;
+            }
+        }
+
         // Date Range Filter
         const dateKey = d.date.substring(0, 7); // YYYY-MM
         const matchDate = (!state.filters.startDate || dateKey >= state.filters.startDate) &&
             (!state.filters.endDate || dateKey <= state.filters.endDate);
 
-        return matchPsm && matchRegion && matchEstate && matchLmm && matchDate;
+        return matchPsm && matchRegion && matchEstate && matchLmm && matchMillType && matchDate;
     });
 
     filtered.sort((a, b) => new Date(a.date) - new Date(b.date));
+
+    updateMillList(filtered);
 
     const completeOerSet = new Set(state.completeness?.oerComplete || []);
     const completeFruitSet = new Set(state.completeness?.fruitComplete || []);
@@ -611,9 +674,9 @@ function updateKPIs(data) {
     elements.kpi.oerBefore.textContent = validOerBefore.length ? avgOerBefore.toFixed(2) + '%' : '-';
     elements.kpi.oerAfter.textContent = validOerAfter.length ? avgOerAfter.toFixed(2) + '%' : '-';
 
-    const gain = (validOerAfter.length ? avgOerAfter : 0) - (validOerBefore.length ? avgOerBefore : 0);
-    elements.kpi.oerGain.textContent = (gain > 0 ? '+' : '') + (validOerAfter.length && validOerBefore.length ? gain.toFixed(2) + '%' : '-');
-    elements.kpi.oerGain.className = `text-2xl font-bold mt-1 ${gain >= 0 ? 'text-green-600' : 'text-red-600'}`;
+    const hfcPercent = (validOerAfter.length ? avgOerAfter : 0) - (validOerBefore.length ? avgOerBefore : 0);
+    elements.kpi.oerGain.textContent = (validOerAfter.length && validOerBefore.length ? hfcPercent.toFixed(2) + '%' : '-');
+    elements.kpi.oerGain.className = `text-2xl font-bold mt-1 ${hfcPercent >= 0 ? 'text-green-600' : 'text-red-600'}`;
 
     elements.kpi.oerMax.textContent = validOerAfter.length ? maxOer.toFixed(2) + '%' : '-';
     if (elements.kpi.oerMin) {
@@ -645,6 +708,34 @@ function updateKPIs(data) {
         elements.kpi.lmmStatus.textContent = '-';
     }
 }
+
+function updateMillList(filteredData) {
+    // Get unique mills from filtered data
+    const uniqueMills = [...new Set(filteredData.map(d => d.estate))].sort();
+
+    // Update count badge
+    if (elements.millCountBadge) {
+        elements.millCountBadge.textContent = `${uniqueMills.length} mill${uniqueMills.length !== 1 ? 's' : ''}`;
+    }
+
+    // Create mill badges
+    if (elements.millList) {
+        const millBadges = uniqueMills.map(mill => {
+            const millInfo = state.millCategories[mill] || {};
+            const millType = millInfo.millType || 'Unknown';
+            const badgeColor = millType === 'Inti-dominant' ? 'bg-teal-100 text-teal-700' : 'bg-orange-100 text-orange-700';
+
+            return `
+                <span class="${badgeColor} px-2 py-1 rounded text-xs font-medium" title="${millType}">
+                    ${mill}
+                </span>
+            `;
+        }).join('');
+
+        elements.millList.innerHTML = millBadges || '<p class="text-xs text-slate-400">No mills match current filters</p>';
+    }
+}
+
 
 function renderMissingDataCard() {
     const container = elements.kpi.missingData;
